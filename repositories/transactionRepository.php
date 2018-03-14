@@ -50,7 +50,7 @@ class TransactionRepository
      * @param int $limit
      * @return array
      */
-    public static function getAllTransactions($limit = 10000) {
+    public static function getTransactions($limit = 10000) {
         $id_shop = (int)Context::getContext()->shop->id;
 
         return (array) Db::getInstance()->executeS('SELECT * FROM `'._DB_PREFIX_.'transact_pro_transaction'

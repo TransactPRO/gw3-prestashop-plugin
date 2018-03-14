@@ -34,7 +34,7 @@ class Transact_pro extends PaymentModule
     private $paymentMethod;
     private $paymentCapture;
 
-    const SUPPORTED_CURRENCIES = array('EUR', 'USD');
+    const SUPPORTED_CURRENCIES = array('EUR');
 
     const CONFIG_ACCOUNT_ID = 'CONFIG_ACCOUNT_ID';
     const CONFIG_SECRET_KEY = 'CONFIG_SECRET_KEY';
@@ -81,6 +81,9 @@ class Transact_pro extends PaymentModule
         }
     }
 
+    /**
+     * @return bool
+     */
     public function install()
     {
         if (!parent::install() || !$this->registerHook('paymentOptions')
@@ -106,6 +109,9 @@ class Transact_pro extends PaymentModule
         return true;
     }
 
+    /**
+     * @return bool
+     */
     public function uninstall()
     {
         $order_state_pending = new OrderState(Configuration::get(self::TRANSACT_PRO_PENDING));
@@ -122,6 +128,9 @@ class Transact_pro extends PaymentModule
         );
     }
 
+    /**
+     * @return string
+     */
     public function hookDisplayPaymentTop()
     {
         $result = '';
@@ -133,10 +142,11 @@ class Transact_pro extends PaymentModule
         return $result;
     }
 
-    /* Admin module */
+    /**
+     * @return string
+     */
     public function getContent()
     {
-
         $output = '';
 
         switch(Tools::getValue('action')) {
@@ -172,6 +182,9 @@ class Transact_pro extends PaymentModule
         return $output.$this->renderTransactionsList();
     }
 
+    /**
+     * @return string
+     */
     protected function renderTransactionsList()
     {
         $helper = new HelperList();
@@ -185,13 +198,19 @@ class Transact_pro extends PaymentModule
         $helper->shopLinkType = '';
 
         $values = $this->getTransactionsListValues();
-        $helper->listTotal = count($values);
+        $helper->listTotal = count($values['rows']);
+        $helper->list_skip_actions = [
+            'cancel' => $values['unableToCancel'],
+            'refund' => $values['unableToRefund'],
+            'charge' => $values['unableToCharge']
+        ];
+
         $helper->tpl_vars = array('show_filters' => false);
         $helper->currentIndex = $this->getModuleConfigUrl();
 
         $this->helperList = $helper;
 
-        return $helper->generateList($values, $this->getTransactionsListStructure());
+        return $helper->generateList($values['rows'], $this->getTransactionsListStructure());
     }
 
     /**
@@ -218,23 +237,45 @@ class Transact_pro extends PaymentModule
      */
     public function getTransactionsListValues()
     {
-        $transactions = TransactionRepository::getAllTransactions();
+        $transactions = TransactionRepository::getTransactions();
+        $unableToCancel = array();
+        $unableToRefund = array();
+        $unableToCharge = array();
 
         foreach ($transactions as $key => &$transaction) {
+            if (!$this->transactproService->canCancelTransaction($transaction['payment_method'], $transaction['transaction_status'])) {
+                $unableToCancel[] = $transaction['transaction_guid'];
+            }
+
+            if (!$this->transactproService->canRefundTransaction($transaction['transaction_status'])) {
+                $unableToRefund[] = $transaction['transaction_guid'];
+            }
+
+            if (!$this->transactproService->canChargeTransaction($transaction['transaction_status'])) {
+                $unableToCharge[] = $transaction['transaction_guid'];
+            }
+
             $transaction['payment_method'] = $this->transactproService->getPaymentMethodName($transaction['payment_method']);
             $transaction['transaction_status'] = $this->transactproService->getTransactionStatusName($transaction['transaction_status']);
             $transaction['created_at'] = date('Y-m-d H:i:s', strtotime($transaction['created_at']));
         }
 
-        return $transactions;
+        return array(
+            'rows' => $transactions,
+            'unableToCancel' => $unableToCancel,
+            'unableToRefund' => $unableToRefund,
+            'unableToCharge' => $unableToCharge
+        );
     }
 
     /**
-     * Display cancel action link
+     * @param string|null $token
+     * @param string $id
+     * @param string|null $name
+     * @return string
      */
     public function displayCancelLink($token = null, $id, $name = null)
     {
-        //TODO: think about hiding unavailable actions
         $this->smarty->assign(array(
             'href' => $this->helperList->currentIndex.'&action=cancel_transaction&'.$this->helperList->identifier
                 .'='.$id,
@@ -285,7 +326,7 @@ class Transact_pro extends PaymentModule
                 'input' => array(
                     array(
                         'type' => 'text',
-                        'label' => $this->l('Gateway url'),
+                        'label' => $this->l('Gateway URL'),
                         'name' => 'gateway_url',
                         'required' => true
                     ),
@@ -323,8 +364,8 @@ class Transact_pro extends PaymentModule
                         'name' => 'payment_capture',
                         'options' => array(
                             'query' => array(
-                                array('id' => TransactproService::PAYMENT_SIDE_MERCHANT, 'name' => $this->l('Merchant side')),
-                                array('id' => TransactproService::PAYMENT_SIDE_GATEWAY, 'name' => $this->l('Payment gateway side')),
+                                array('id' => TransactproService::PAYMENT_SIDE_MERCHANT, 'name' => $this->l('Merchant Side')),
+                                array('id' => TransactproService::PAYMENT_SIDE_GATEWAY, 'name' => $this->l('Payment Gateway Side')),
                             ),
                             'id' => 'id',
                             'name' => 'name'
@@ -349,7 +390,6 @@ class Transact_pro extends PaymentModule
         $helper->identifier = $this->identifier;
         $helper->submit_action = 'btnSubmit';
         $helper->currentIndex = $this->getModuleConfigUrl();
-        //$helper->token = Tools::getAdminTokenLite('AdminModules');
         $helper->tpl_vars = array(
             'fields_value' => $this->getConfigFieldsValues(),
             'languages' => $this->context->controller->getLanguages(),
@@ -359,7 +399,9 @@ class Transact_pro extends PaymentModule
         return $helper->generateForm(array($form));
     }
 
-    /* Renders refund form */
+    /**
+     * @return string
+     */
     protected function renderRefundForm()
     {
         $transaction = $this->getTransaction(Tools::getValue('transaction_guid'));
@@ -437,6 +479,9 @@ class Transact_pro extends PaymentModule
         return $html;
     }
 
+    /**
+     * @return string
+     */
     protected function postProcessTransactionCharge() {
         $transaction = $this->getTransaction(Tools::getValue('transaction_guid'));
         $html = '';
@@ -445,7 +490,7 @@ class Transact_pro extends PaymentModule
             $gw = $this->initGateway();
             $response = $this->transactproService->chargeDmsHoldTransaction($gw, $transaction['transaction_guid'], $transaction['payment_method']);
 
-            $transaction_status = $response['gw']['status-code'];
+            $transaction_status = $response['gw']['status-code'] ?? null;
             if (TransactproService::STATUS_SUCCESS === $transaction_status) {
                 $this->updateTransactionStatus($transaction['id'], $transaction_status);
                 $orderId = $transaction['order_id'];
@@ -462,7 +507,6 @@ class Transact_pro extends PaymentModule
                 $reason = $response['error']['message'] ?? 'UNKNOWN';
                 $html .= $this->displayError($this->l('Transaction charging failed. Reason: '.$reason));
             }
-
         } else {
             $html .= $this->displayError($this->l('Cannot charge transaction with status "'
                 .$this->transactproService->getTransactionStatusName($transaction['transaction_status']).'".'));
@@ -471,6 +515,9 @@ class Transact_pro extends PaymentModule
         return $html.$this->renderSettingsForm();
     }
 
+    /**
+     * @return string
+     */
     protected function postProcessTransactionCancel() {
         $transaction = $this->getTransaction(Tools::getValue('transaction_guid'));
         $html = '';
@@ -479,7 +526,7 @@ class Transact_pro extends PaymentModule
             $gw = $this->initGateway();
             $response = $this->transactproService->cancelTransaction($gw, $transaction['transaction_guid'], $transaction['payment_method']);
 
-            $transaction_status = $response['gw']['status-code'];
+            $transaction_status = $response['gw']['status-code'] ?? null;
             if (TransactproService::STATUS_REVERSED == $transaction_status || TransactproService::STATUS_DMS_CANCEL_OK == $transaction_status) {
                 $this->updateTransactionStatus($transaction['id'], $transaction_status);
                 $orderId = $transaction['order_id'];
@@ -548,7 +595,7 @@ class Transact_pro extends PaymentModule
             $refund_amount = $this->transactproService->lowestDenomination($amount);
             $response = $this->transactproService->refundTransaction($gw, $transaction['transaction_guid'], $refund_amount);
 
-            $status = $response['gw']['status-code'];
+            $status = $response['gw']['status-code'] ?? null;
 
             $refunds = array();
 
@@ -590,6 +637,9 @@ class Transact_pro extends PaymentModule
         return $html;
     }
 
+    /**
+     * @return array
+     */
     public function getConfigFieldsValues()
     {
         return array(
@@ -601,6 +651,10 @@ class Transact_pro extends PaymentModule
         );
     }
 
+    /**
+     * @param int|null $id_shop
+     * @return array|false|mysqli_result|null|PDOStatement|resource
+     */
     public function getSupportedCurrencies($id_shop = null)
     {
         $id_shop = Context::getContext()->shop->id;
@@ -627,6 +681,9 @@ class Transact_pro extends PaymentModule
         return TransactionRepository::getTransaction($guid);
     }
 
+    /**
+     * @return bool
+     */
     public function checkSupportedCurrencies()
     {
         return !empty($this->getSupportedCurrencies());
@@ -646,7 +703,7 @@ class Transact_pro extends PaymentModule
             $response['is_success'] = $this->transactproService
                 ->isSuccessTransaction($this->paymentMethod, $response['gw']['status-code'] ?? -1);
         } catch (\Exception $e) {
-            PrestaShopLogger::addLog($e->getMessage(), 1, $e->getCode(), null, null, true);
+            PrestaShopLogger::addLog('Transact Pro: '.$e->getMessage(), 1, $e->getCode(), null, null, true);
         }
 
         return $response;
@@ -709,6 +766,10 @@ class Transact_pro extends PaymentModule
         return TransactionRepository::updateTransactionRefunds($id, $refunds);
     }
 
+    /**
+     * @param int $orderId
+     * @param array $response
+     */
     public function approveOrderPayment($orderId, $response)
     {
         $transaction_status = (int)$response['gw']['status-code'];
@@ -724,14 +785,16 @@ class Transact_pro extends PaymentModule
         ));
     }
 
-    /* Checkout payment gateway */
+    /**
+     * @param array $params
+     * @return array|void
+     */
     public function hookPaymentOptions($params)
     {
         if (!$this->active) {
             return;
         }
 
-        // Check supportive currencies
         if (!$this->checkSupportedCurrencies()) {
             return;
         }
@@ -749,16 +812,27 @@ class Transact_pro extends PaymentModule
         return $payment_options;
     }
 
-    // After Payment Method was Checked - Method for Payment Options in 1.7
+    /**
+     * @return PaymentOption
+     */
     public function getEmbeddedPaymentOption()
     {
         $embeddedOption = new PaymentOption();
         $embeddedOption->setCallToActionText($this->l('Credit/Debit Card (Transact Pro)'))
-            ->setAction($this->context->link->getModuleLink($this->name, 'validation', array(), true));
+            ->setAction($this->context->link->getModuleLink($this->name, 'validation', array(), true))
+        ;
+
+        if ($this->paymentCapture === TransactproService::PAYMENT_SIDE_GATEWAY) {
+            $embeddedOption->setAdditionalInformation($this->context->smarty->fetch('module:transact_pro/views/templates/hook/payment.tpl'));
+        }
 
         return $embeddedOption;
     }
 
+    /**
+     * @param array $params
+     * @return string
+     */
     public function hookPaymentReturn($params)
     {
         $state = $params['order']->getCurrentState();
@@ -816,16 +890,17 @@ class Transact_pro extends PaymentModule
 
         $paymentData = array(
             'customer' => array(
-                //TODO
-                //'email' => $this->context->customer->email
-                'email' => 'vadim.k@cortlex.com'
+                'email' => $this->context->customer->email,
             ),
             'system' => array(
-                'user_IP' => '37.45.200.52'//$_SERVER['REMOTE_ADDR']
+                'user_IP' => $_SERVER['REMOTE_ADDR']
             ),
             'money' => array(
                 'amount' => $this->transactproService->lowestDenomination($data['amount']),
                 'currency' => $data['currency']
+            ),
+            'order' => array(
+                'recipient_name' => Configuration::get('PS_SHOP_NAME')
             )
         );
 
@@ -848,11 +923,17 @@ class Transact_pro extends PaymentModule
         return $this->context->link->getAdminLink('AdminModules').'&configure=' . $this->name;
     }
 
+    /**
+     * @return bool
+     */
     private function createTable()
     {
         return TransactionRepository::createTable();
     }
 
+    /**
+     * @return bool
+     */
     private function validatePostRequest()
     {
         $fields = [
@@ -872,7 +953,9 @@ class Transact_pro extends PaymentModule
         return true;
     }
 
-    /* Admin form submit */
+    /**
+     * @return string
+     */
     private function processPostRequest()
     {
         Configuration::updateValue(self::CONFIG_GATEWAY_URL, Tools::getValue('gateway_url'));

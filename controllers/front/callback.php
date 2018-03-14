@@ -37,6 +37,8 @@ class Transact_ProCallbackModuleFrontController extends ModuleFrontController
         if (!$isSuccess) {
             PrestaShopLogger::addLog('Transact pro callback was failed. $_POST='.substr(print_r($_POST, true), 0, 500), 1, 500, null, null, true);
         }
+
+        exit;
     }
 
     /**

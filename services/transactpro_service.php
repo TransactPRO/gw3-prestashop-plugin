@@ -62,6 +62,7 @@ class TransactproService
     const DEFAULT_CUSTOMER_DATA = array(
         'email' => '',
         'phone' => ' ',
+        'birth_date' => ' ',
         'billing_address_country' => ' ',
         'billing_address_state' => ' ',
         'billing_address_city' => ' ',
@@ -80,7 +81,8 @@ class TransactproService
 
     const DEFAULT_ORDER_DATA = array(
         'description' => 'Buy Order',
-        'merchant_side_url' => _PS_BASE_URL_
+        'merchant_side_url' => _PS_BASE_URL_,
+        'recipient_name' => 'PrestaShop'
     );
 
     const DEFAULT_SYSTEM_DATA = array(
@@ -113,6 +115,10 @@ class TransactproService
         //Do nothing
     }
 
+    /**
+     * @param int $transaction_status
+     * @return mixed|string
+     */
     public function getTransactionStatusName($transaction_status)
     {
         $result = self::STATUS_UNKNOWN_NAME;
@@ -158,6 +164,10 @@ class TransactproService
         return $result;
     }
 
+    /**
+     * @param int $payment_method
+     * @return mixed|string
+     */
     public function getPaymentMethodName($payment_method)
     {
         $result = self::METHOD_UNKNOWN_NAME;
@@ -176,6 +186,10 @@ class TransactproService
         return $result;
     }
 
+    /**
+     * @param int $transaction_status
+     * @return bool
+     */
     public function canRefundTransaction($transaction_status)
     {
         return in_array((int)$transaction_status, array(
@@ -183,6 +197,10 @@ class TransactproService
         ));
     }
 
+    /**
+     * @param int $transaction_status
+     * @return bool
+     */
     public function canChargeTransaction($transaction_status)
     {
         return in_array((int)$transaction_status, array(
@@ -190,6 +208,11 @@ class TransactproService
         ));
     }
 
+    /**
+     * @param int $payment_method
+     * @param int $transaction_status
+     * @return bool
+     */
     public function canCancelTransaction($payment_method, $transaction_status)
     {
         $payment_method = (int)$payment_method;
@@ -258,6 +281,13 @@ class TransactproService
         return (float) ($value / pow(10, $power));
     }
 
+    /**
+     * @param Gateway $gw
+     * @param int $payment_method
+     * @param array $data
+     * @return array
+     * @throws Exception
+     */
     public function createTransaction($gw, $payment_method, $data)
     {
         $endpoint_name = 'create'.$this->getPaymentMethodInternalName($payment_method);
@@ -295,6 +325,12 @@ class TransactproService
         return $this->processEndpoint($gw, $refund);
     }
 
+    /**
+     * @param Gateway $gw
+     * @param string $transaction_id
+     * @param int $amount
+     * @return array
+     */
     public function chargeDmsHoldTransaction(Gateway $gw, $transaction_id, $amount)
     {
         $charge = $gw->createDmsCharge();
@@ -321,11 +357,21 @@ class TransactproService
         return $result;
     }
 
+    /**
+     * @param string $url
+     * @return Gateway
+     */
     public function createGateway(string $url) : Gateway
     {
         return new Gateway($url);
     }
 
+    /**
+     * @param Gateway $gw
+     * @param string $account_id
+     * @param string $secret_key
+     * @return TransactproService
+     */
     public function auth(Gateway $gw, string $account_id, string $secret_key): self
     {
         $gw->auth()
@@ -437,6 +483,10 @@ class TransactproService
         }
     }
 
+    /**
+     * @param int $payment_method
+     * @return mixed|string
+     */
     private function getPaymentMethodInternalName($payment_method)
     {
         $result = self::METHOD_UNKNOWN_NAME;
