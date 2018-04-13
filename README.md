@@ -9,7 +9,8 @@ This module is using to connect PrestaShop to Transact Pro Gateway payment syste
 - [PrestaShop 1.7](https://www.prestashop.com/en/download)
 
 ## Installation, Configuration and usage
-Please, check out the [documentation](./docs/index.md)
+Get the plugin archive from [distriutions](./dist) or download [sources](./src) (including "transact_pro" folder) and archive them. 
+Then please, check out the [documentation](./docs/index.md)
 
 ## Submit bugs and feature requests
  
