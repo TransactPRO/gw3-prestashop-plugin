@@ -35,20 +35,8 @@ class Transact_ProProcessModuleFrontController extends ModuleFrontController
             $customer = new Customer($cart->id_customer);
 
             if (Tools::getValue('make_payment')) {
-                $total = number_format($cart->getOrderTotal(true, Cart::BOTH), 2, '.', '');
-                $data = array(
-                    'amount' => $total,
-                    'currency' => $currency->iso_code
-                );
-
-                $data['payment_instrument'] = array(
-                    'pan' => strip_tags(str_replace(' ', '', Tools::getValue('card_pan'))),
-                    'exp_year' => (int)Tools::getValue('expiration_year'),
-                    'exp_month' => (int)Tools::getValue('expiration_month'),
-                    'cvc' => strip_tags(trim(Tools::getValue('cvc'))),
-                    'holder' => strip_tags(trim(Tools::getValue('card_holder')))
-                );
-
+                $data = $this->extractPaymentData($cart, $currency);
+                $total = $data['amount'];
                 $response = $this->module->makeGatewayRequest($data);
 
                 if ($response) {
@@ -104,5 +92,68 @@ class Transact_ProProcessModuleFrontController extends ModuleFrontController
         } else {
             $this->setTemplate('module:transact_pro/views/templates/front/payment_process_error.tpl');
         }
+    }
+
+    /**
+     * @param Cart $cart
+     * @param Currency $currency
+     * @return array
+     */
+    private function extractPaymentData($cart, $currency) {
+        $total = number_format($cart->getOrderTotal(true, Cart::BOTH), 2, '.', '');
+        $data = array(
+            'amount' => $total,
+            'currency' => $currency->iso_code
+        );
+
+        $data['payment_instrument'] = array(
+            'pan' => strip_tags(str_replace(' ', '', Tools::getValue('card_pan'))),
+            'exp_year' => (int)Tools::getValue('expiration_year'),
+            'exp_month' => (int)Tools::getValue('expiration_month'),
+            'cvc' => strip_tags(trim(Tools::getValue('cvc'))),
+            'holder' => strip_tags(trim(Tools::getValue('card_holder')))
+        );
+
+        $data['customer'] = $this->extractCustomerData($cart);
+
+        return $data;
+    }
+
+    /**
+     * @param Cart $cart
+     * @return array
+     */
+    private function extractCustomerData($cart) 
+    {
+        $defaultValue = ' ';
+
+        $shippingAddress = new Address(intval($cart->id_address_delivery));
+        $shippingCountry = new Country(intval($shippingAddress->id_country));
+
+        $billingAddress = new Address(intval($cart->id_address_invoice));
+        $billingCountry = new Country(intval($billingAddress->id_country));
+
+        return array(
+            'phone' => $this->sanitize($shippingAddress->phone) ?: $defaultValue,
+            'billing_address_country' => $this->sanitize($billingCountry->iso_code),
+            'billing_address_city' => $this->sanitize($billingAddress->city) ?: $defaultValue,
+            'billing_address_street' => $this->sanitize($billingAddress->address1) ?: $defaultValue,
+            'billing_address_house' => $this->sanitize($billingAddress->address2) ?: $defaultValue,
+            'billing_address_ZIP' => $this->sanitize($billingAddress->postcode) ?: $defaultValue,
+            'shipping_address_country' => $this->sanitize($shippingCountry->iso_code),
+            'shipping_address_city' => $this->sanitize($shippingAddress->city) ?: $defaultValue,
+            'shipping_address_street' => $this->sanitize($shippingAddress->address1) ?: $defaultValue,
+            'shipping_address_house' => $this->sanitize($shippingAddress->address2) ?: $defaultValue,
+            'shipping_address_ZIP' => $this->sanitize($shippingAddress->postcode) ?: $defaultValue
+        );
+    }
+
+    /**
+     * @param string $value
+     * @return string
+     */
+    private function sanitize($value) 
+    {
+        return preg_replace('/[^\w\d\s]/', ' ', (string) $value);
     }
 }

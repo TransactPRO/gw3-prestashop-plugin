@@ -889,9 +889,10 @@ class Transact_pro extends PaymentModule
         $gw = $this->initGateway();
 
         $paymentData = array(
-            'customer' => array(
+            'customer' => array_merge($data['customer'], array(
                 'email' => $this->context->customer->email,
-            ),
+                'birth_date' => $this->context->customer->birthday
+            )),
             'system' => array(
                 'user_IP' => $_SERVER['REMOTE_ADDR']
             ),
