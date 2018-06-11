@@ -8,6 +8,7 @@
 
 include_once(_PS_MODULE_DIR_ . 'transact_pro/libraries/gw3/vendor/autoload.php');
 include_once(_PS_MODULE_DIR_ . 'transact_pro/services/transactpro_service.php');
+include_once(_PS_MODULE_DIR_ . 'transact_pro/services/DataExtractionHelper.php');
 include_once(_PS_MODULE_DIR_ . 'transact_pro/repositories/transactionRepository.php');
 
 use PrestaShop\PrestaShop\Core\Payment\PaymentOption;
@@ -488,11 +489,15 @@ class Transact_pro extends PaymentModule
 
         if ($this->transactproService->canChargeTransaction($transaction['transaction_status'])) {
             $gw = $this->initGateway();
-            $response = $this->transactproService->chargeDmsHoldTransaction($gw, $transaction['transaction_guid'], $transaction['payment_method']);
+
+            $amount = $this->transactproService->lowestDenomination($transaction['transaction_amount']);
+            $response = $this->transactproService->chargeDmsHoldTransaction($gw, $transaction['transaction_guid'], $amount);
 
             $transaction_status = $response['gw']['status-code'] ?? null;
+            $charge_guid = $response['gw']['gateway-transaction-id'];
+
             if (TransactproService::STATUS_SUCCESS === $transaction_status) {
-                $this->updateTransactionStatus($transaction['id'], $transaction_status);
+                $this->mutateTransaction($transaction['id'], $charge_guid, $transaction_status);
                 $orderId = $transaction['order_id'];
 
                 $history = new OrderHistory();
@@ -612,8 +617,9 @@ class Transact_pro extends PaymentModule
             );
 
             $this->updateTransactionRefunds($transaction['id'], $refunds);
+            $this->registerRefundTransaction($transaction, $response, $amount);
 
-            if ($status == TransactproService::STATUS_REFUND_SUCCESS) {
+            if ($status === TransactproService::STATUS_REFUND_SUCCESS) {
                 $orderId = $transaction['order_id'];
 
                 $history = new OrderHistory();
@@ -767,6 +773,34 @@ class Transact_pro extends PaymentModule
     }
 
     /**
+     * @param int $id
+     * @param string $guid
+     * @param int $status
+     * @return bool
+     */
+    public function mutateTransaction($id, $guid, $status)
+    {
+        return TransactionRepository::mutateTransaction($id, $guid, $status);
+    }
+
+    /**
+     * @param array $originalTransaction
+     * @param array $response
+     * @param float $amount
+     * @return bool
+     */
+    public function registerRefundTransaction($originalTransaction, $response, $amount)
+    {
+        $transaction_guid = $response['gw']['gateway-transaction-id'];
+        $transaction_status = (int)$response['gw']['status-code'];
+        $payment_method = (int)$this->paymentMethod;
+        $user_ip = $_SERVER['REMOTE_ADDR'];
+
+        return TransactionRepository::add($transaction_guid, $originalTransaction['order_id'], $transaction_status, $payment_method,
+            $amount, $originalTransaction['transaction_currency'], $user_ip);
+    }
+
+    /**
      * @param int $orderId
      * @param array $response
      */
@@ -888,10 +922,16 @@ class Transact_pro extends PaymentModule
     protected function makeTransaction($data) {
         $gw = $this->initGateway();
 
+        $birthday = '';
+        if ($this->context->customer->birthday && $this->context->customer->birthday != '0000-00-00') {
+            $date = DateTime::createFromFormat('Y-m-d', $this->context->customer->birthday);
+            $birthday = $date->format('dmY');
+        }
+
         $paymentData = array(
             'customer' => array_merge($data['customer'], array(
                 'email' => $this->context->customer->email,
-                'birth_date' => $this->context->customer->birthday
+                'birth_date' => $birthday
             )),
             'system' => array(
                 'user_IP' => $_SERVER['REMOTE_ADDR']

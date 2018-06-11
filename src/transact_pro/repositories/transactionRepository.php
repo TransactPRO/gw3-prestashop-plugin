@@ -95,6 +95,15 @@ class TransactionRepository
         return Db::getInstance()->execute($sql);
     }
 
+    public static function mutateTransaction($id, $guid, $status)
+    {
+        $sql = "UPDATE `" . _DB_PREFIX_ . "transact_pro_transaction` SET transaction_guid='" .(string) $guid
+            . "', transaction_status='" . (int) $status . "' where id=".(int)$id;
+        ;
+
+        return Db::getInstance()->execute($sql);
+    }
+
     /**
      * @param int $id
      * @param array $refunds
@@ -102,7 +111,10 @@ class TransactionRepository
      */
     public static function updateTransactionRefunds($id, $refunds)
     {
-        $sql = "UPDATE `" . _DB_PREFIX_ . "transact_pro_transaction` SET is_refunded='".($refunds ? 1 : 0)
+        $isRefunded = $refunds ?
+            $refunds[count($refunds) - 1]['transaction_status'] === TransactproService::STATUS_REFUND_SUCCESS : false;
+
+        $sql = "UPDATE `" . _DB_PREFIX_ . "transact_pro_transaction` SET is_refunded='".($isRefunded ? 1 : 0)
             ."', refunded_at=NOW(), refunds='".pSQL(json_encode($refunds)) . "' where id=".(int)$id;
         ;
 

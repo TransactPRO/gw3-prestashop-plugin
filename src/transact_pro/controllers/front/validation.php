@@ -49,16 +49,21 @@ class Transact_ProValidationModuleFrontController extends ModuleFrontController
         }
 
         $currency = Context::getContext()->currency;
-        $total = (float)number_format($cart->getOrderTotal(true, Cart::BOTH), 2, '.', '');;
+        $total = (float)number_format($cart->getOrderTotal(true, Cart::BOTH), 2, '.', '');
 
         $this->moveForward($cart, $total, $currency);
     }
 
+    /**
+     * @param Cart $cart
+     * @param float $total
+     * @param Currency $currency
+     */
     private function moveForward($cart, $total, $currency) {
         $isGatewayPaymentSide = $this->module->getPaymentCapture() === TransactproService::PAYMENT_SIDE_GATEWAY;
 
         if($isGatewayPaymentSide) {
-            $this->moveToGateway($cart, $total, $currency);
+            $this->moveToGateway($cart, $currency);
         } else {
             $this->validateOrder($cart, $total, $currency);
 
@@ -71,14 +76,11 @@ class Transact_ProValidationModuleFrontController extends ModuleFrontController
 
     /**
      * @param Cart $cart
-     * @param float $total
      * @param Currency $currency
      */
-    private function moveToGateway($cart, $total, $currency) {
-        $data = array(
-            'amount' => $total,
-            'currency' => $currency->iso_code
-        );
+    private function moveToGateway($cart, $currency) {
+        $data = DataExtractionHelper::extractPaymentData($cart, $currency);
+        $total = $data['amount'];
 
         $response = $this->module->makeGatewayRequest($data);
 

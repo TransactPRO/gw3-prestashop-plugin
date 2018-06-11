@@ -14,7 +14,7 @@
 ![](./images/settings-01.png)
 
 #### Settings
-- `Gateway URL`: - Leave empty for sandbox mode (`https://api.sandbox.transactpro.io/v3.0`) or enter the information received from Transact Pro support team (usually it's `https://api.transactpro.lv/v3.0`)
+- `Gateway URL`: - Enter the information received from Transact Pro support team (usually it's `https://api.transactpro.lv/v3.0`)
 - `Account ID`: - Specify your numeric Account ID received from the Transact Pro support team, the specific Account ID is related the whay payments being processed
 - `Secret Key`: - Specify your Secret Key received from the Transact Pro support team 
 - `Payment Method`: Choose payment method you want to use (`SMS` is most common used)
@@ -29,7 +29,12 @@
     - 100: CARD DETAILS COLLECTED ON GW SIDE_3D_V     - That means Security 3D transactions, customer will be redirected to payment gateway to enter credit card information, you need to set `Payment Infomation Capture` as `Payment gateway side` 
     - 101: CARD DETAILS COLLECTED ON GW SIDE_NON 3D_V - That means non-3D transactions, customer will be redirected to payment gateway to enter credit card information, you need to set `Payment Infomation Capture` as `Payment gateway side` 
     - 200: CARD DETAILS COLLECTED ON API_3D_V         - That means Security 3D transactions, customer will enter credit card information directly on Checkout page, you need to set `Payment Infomation Capture` as `Payment gateway side` 
-    - 201: CARD DETAILS COLLECTED ON API_NON3D_V      - That means non-3D transactions, customer will enter credit card information directly on Checkout page, you need to set `Payment Infomation Capture` as `Payment gateway side` 
+    - 201: CARD DETAILS COLLECTED ON API_NON3D_V      - That means non-3D transactions, customer will enter credit card information directly on Checkout page, you need to set `Payment Infomation Capture` as `Payment gateway side`
+     
+### Static settings
+The application have 2 static urls to work with gateway in some cases:
+- Callback url: /module/transact_pro/callback
+- Redirect url: /module/transact_pro/redirect
 
 ### Transactions
 See [Transaction handling](#transactions) section
