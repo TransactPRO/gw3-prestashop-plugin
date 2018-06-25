@@ -406,6 +406,13 @@ class Transact_pro extends PaymentModule
     protected function renderRefundForm()
     {
         $transaction = $this->getTransaction(Tools::getValue('transaction_guid'));
+        $maxRefundAmount = $transaction['transaction_amount'];
+
+        foreach (json_decode($transaction['refunds'], true) as $refund) {
+            if ($refund['transaction_status'] === TransactproService::STATUS_REFUND_SUCCESS) {
+                $maxRefundAmount -= $refund['amount'];
+            }
+        }
 
         $fields_form = array(
             'form' => array(
@@ -418,7 +425,7 @@ class Transact_pro extends PaymentModule
                         'type' => 'text',
                         'label' => $this->l('Refund Amount'),
                         'name' => 'refund_amount',
-                        'desc' => $this->l('Full refund is: ').$transaction['transaction_amount'].' '.$transaction['transaction_currency'],
+                        'desc' => $this->l('Full refund is: ').$maxRefundAmount.' '.$transaction['transaction_currency'],
                         'required' => true
                     ),
                     array(
